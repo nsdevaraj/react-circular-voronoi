@@ -29,15 +29,15 @@ const App = () => {
   };
   
   const handleCellClick = (data) => {
-    console.log('Cell clicked:', data);
-    alert(`Clicked: ${data.name} - Value: ${data.value.toLocaleString()}`);
+    console.log('Leaf cell clicked:', data);
+    alert(`Clicked leaf node: ${data.name} - Value: ${data.value.toLocaleString()}`);
   };
   
   return (
     <div className="app-container">
       <header>
         <h1>React Circular Voronoi Demo</h1>
-        <p>Interactive visualization of hierarchical data using circular Voronoi treemaps</p>
+        <p>Interactive visualization with level drill-down functionality</p>
       </header>
       
       <div className="controls">
@@ -94,7 +94,9 @@ const App = () => {
       <div className="instructions">
         <h2>Instructions</h2>
         <ul>
-          <li>Click on cells to see detailed information</li>
+          <li>Click on cells to drill down into that category</li>
+          <li>Use the back button (↩) to navigate up one level</li>
+          <li>Use the "Reset to Root" button to return to the top level</li>
           <li>Toggle between datasets using the dropdown menu</li>
           <li>Show or hide labels with the checkbox</li>
           <li>Adjust the size of the visualization with the + and - buttons</li>
@@ -102,7 +104,7 @@ const App = () => {
       </div>
       
       <footer>
-        <p>React Circular Voronoi Library - Built with d3-voronoi-treemap</p>
+        <p>React Circular Voronoi Library - Based on Will Chase's Observable implementation</p>
       </footer>
     </div>
   );

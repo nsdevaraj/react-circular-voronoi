@@ -8,10 +8,7 @@
   - react
   - react-dom
   - d3
-  - d3-voronoi-treemap
-  - d3-weighted-voronoi
-  - d3-voronoi-map
-- [ ] Understand circular boundary implementation
+- [x] Understand circular boundary implementation with drill-down functionality
 
 ## Setup
 - [x] Initialize project structure
@@ -21,16 +18,17 @@
 
 ## Implementation
 - [x] Create React component structure
-- [x] Implement core Voronoi algorithm
+- [x] Implement core Voronoi algorithm using Will Chase's Observable approach
 - [x] Add circular boundary constraint
+- [x] Implement level drill-down functionality
 - [x] Develop color scheme functionality
 - [x] Implement data input handling
 - [x] Create customization options
 - [x] Build responsive layout
 
 ## Demo and Testing
-- [ ] Create sample data
-- [ ] Build demo application
+- [x] Create sample data
+- [x] Build demo application with level navigation
 - [ ] Test with various data sets
 - [ ] Optimize performance
 - [ ] Fix any bugs
