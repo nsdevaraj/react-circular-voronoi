@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>React Circular Voronoi Demo</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background-color: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    h1 {
+      color: #2c3e50;
+      margin-bottom: 10px;
+    }
+    .description {
+      color: #7f8c8d;
+      margin-bottom: 30px;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-bottom: 20px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 6px;
+    }
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    label {
+      font-weight: 500;
+    }
+    select, button {
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      background-color: white;
+      font-size: 14px;
+    }
+    button {
+      cursor: pointer;
+      background-color: #4a90e2;
+      color: white;
+      border: none;
+      transition: background-color 0.2s;
+    }
+    button:hover {
+      background-color: #3a7bc8;
+    }
+    .size-buttons {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .size-display {
+      min-width: 80px;
+      text-align: center;
+    }
+    .visualization {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    #voronoi-container {
+      border: 1px solid #eee;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>React Circular Voronoi Demo</h1>
+      <p class="description">Interactive visualization of hierarchical data using circular Voronoi treemaps</p>
+    </header>
+
+    <div class="controls">
+      <div class="control-group">
+        <label for="dataset">Dataset:</label>
+        <select id="dataset">
+          <option value="population">Global Population</option>
+          <option value="market">Market Sectors</option>
+        </select>
+      </div>
+      
+      <div class="control-group">
+        <label>
+          <input type="checkbox" id="show-labels" checked>
+          Show Labels
+        </label>
+      </div>
+      
+      <div class="control-group">
+        <label>Size:</label>
+        <div class="size-buttons">
+          <button id="size-decrease">-</button>
+          <span class="size-display" id="size-display">600x600</span>
+          <button id="size-increase">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="visualization">
+      <div id="voronoi-container"></div>
+    </div>
+  </div>
+
+  <!-- Load React -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- Load D3 dependencies -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/d3-polygon@3.0.1/dist/d3-polygon.min.js"></script>
+  <script src="https://unpkg.com/d3-voronoi-treemap@1.1.1/build/d3-voronoi-treemap.js"></script>
+  
+  <!-- Load our library -->
+  <script src="./index.js"></script>
+
+  <script>
+    // Sample data
+    const populationData = {
+      name: "Population Distribution",
+      children: [
+        {
+          name: "North America",
+          value: 579000000,
+          children: [
+            { name: "USA", value: 331000000 },
+            { name: "Canada", value: 38000000 },
+            { name: "Mexico", value: 126000000 },
+            { name: "Other", value: 84000000 }
+          ]
+        },
+        {
+          name: "Europe",
+          value: 746000000,
+          children: [
+            { name: "Germany", value: 83000000 },
+            { name: "UK", value: 67000000 },
+            { name: "France", value: 65000000 },
+            { name: "Italy", value: 60000000 },
+            { name: "Spain", value: 47000000 },
+            { name: "Other", value: 424000000 }
+          ]
+        },
+        {
+          name: "Asia",
+          value: 4641000000,
+          children: [
+            { name: "China", value: 1402000000 },
+            { name: "India", value: 1380000000 },
+            { name: "Indonesia", value: 273000000 },
+            { name: "Pakistan", value: 221000000 },
+            { name: "Bangladesh", value: 165000000 },
+            { name: "Japan", value: 126000000 },
+            { name: "Other", value: 1074000000 }
+          ]
+        },
+        {
+          name: "Africa",
+          value: 1340000000,
+          children: [
+            { name: "Nigeria", value: 206000000 },
+            { name: "Ethiopia", value: 115000000 },
+            { name: "Egypt", value: 102000000 },
+            { name: "DR Congo", value: 90000000 },
+            { name: "South Africa", value: 59000000 },
+            { name: "Other", value: 768000000 }
+          ]
+        },
+        {
+          name: "South America",
+          value: 430000000,
+          children: [
+            { name: "Brazil", value: 212000000 },
+            { name: "Colombia", value: 50000000 },
+            { name: "Argentina", value: 45000000 },
+            { name: "Peru", value: 33000000 },
+            { name: "Other", value: 90000000 }
+          ]
+        },
+        {
+          name: "Oceania",
+          value: 42000000,
+          children: [
+            { name: "Australia", value: 25000000 },
+            { name: "New Zealand", value: 5000000 },
+            { name: "Other", value: 12000000 }
+          ]
+        }
+      ]
+    };
+
+    const marketCapData = {
+      name: "Global Market Sectors",
+      children: [
+        {
+          name: "Technology",
+          value: 12500,
+          children: [
+            { name: "Software", value: 4800 },
+            { name: "Hardware", value: 3200 },
+            { name: "Semiconductors", value: 2500 },
+            { name: "IT Services", value: 2000 }
+          ]
+        },
+        {
+          name: "Healthcare",
+          value: 8700,
+          children: [
+            { name: "Pharmaceuticals", value: 3500 },
+            { name: "Medical Devices", value: 2200 },
+            { name: "Biotech", value: 1800 },
+            { name: "Healthcare Services", value: 1200 }
+          ]
+        },
+        {
+          name: "Financial",
+          value: 9500,
+          children: [
+            { name: "Banking", value: 4200 },
+            { name: "Insurance", value: 2800 },
+            { name: "Asset Management", value: 1500 },
+            { name: "Fintech", value: 1000 }
+          ]
+        },
+        {
+          name: "Consumer",
+          value: 7800,
+          children: [
+            { name: "Retail", value: 2500 },
+            { name: "Food & Beverage", value: 2000 },
+            { name: "Apparel", value: 1800 },
+            { name: "Entertainment", value: 1500 }
+          ]
+        },
+        {
+          name: "Industrial",
+          value: 6500,
+          children: [
+            { name: "Manufacturing", value: 2800 },
+            { name: "Aerospace", value: 1500 },
+            { name: "Construction", value: 1200 },
+            { name: "Transportation", value: 1000 }
+          ]
+        },
+        {
+          name: "Energy",
+          value: 5200,
+          children: [
+            { name: "Oil & Gas", value: 2500 },
+            { name: "Renewable Energy", value: 1500 },
+            { name: "Utilities", value: 1200 }
+          ]
+        }
+      ]
+    };
+
+    // Color schemes
+    const populationColors = [
+      '#ff9e6d', '#86cbff', '#c2e5a0', '#fff686', '#ff86b1', '#8686ff',
+      '#f97b6b', '#74c7b8', '#d4a4eb', '#a6a6a6'
+    ];
+    
+    const marketColors = [
+      '#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949',
+      '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'
+    ];
+
+    // Initialize state
+    let width = 600;
+    let height = 600;
+    let showLabels = true;
+    let currentDataset = 'population';
+
+    // Initialize React components when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+      renderVoronoi();
+      
+      // Set up event listeners
+      document.getElementById('dataset').addEventListener('change', function(e) {
+        currentDataset = e.target.value;
+        renderVoronoi();
+      });
+      
+      document.getElementById('show-labels').addEventListener('change', function(e) {
+        showLabels = e.target.checked;
+        renderVoronoi();
+      });
+      
+      document.getElementById('size-decrease').addEventListener('click', function() {
+        width = Math.max(400, width - 100);
+        height = Math.max(400, height - 100);
+        updateSizeDisplay();
+        renderVoronoi();
+      });
+      
+      document.getElementById('size-increase').addEventListener('click', function() {
+        width = Math.min(1200, width + 100);
+        height = Math.min(1200, height + 100);
+        updateSizeDisplay();
+        renderVoronoi();
+      });
+    });
+
+    // Update the size display
+    function updateSizeDisplay() {
+      document.getElementById('size-display').textContent = `${width}x${height}`;
+    }
+
+    // Handle cell click
+    function handleCellClick(data) {
+      alert(`Clicked: ${data.name} - Value: ${data.value.toLocaleString()}`);
+    }
+
+    // Render the Voronoi diagram
+    function renderVoronoi() {
+      const container = document.getElementById('voronoi-container');
+      container.innerHTML = '';
+      
+      // Create the props for the CircularVoronoi component
+      const props = {
+        data: currentDataset === 'population' ? populationData : marketCapData,
+        width: width,
+        height: height,
+        colors: currentDataset === 'population' ? populationColors : marketColors,
+        showLabels: showLabels,
+        labelMinSize: 15,
+        onCellClick: handleCellClick,
+        valueKey: 'value',
+        labelKey: 'name',
+        padding: 10
+      };
+      
+      // Render the React component
+      const domContainer = document.getElementById('voronoi-container');
+      const root = ReactDOM.createRoot(domContainer);
+      root.render(React.createElement(ReactCircularVoronoi.default, props));
+    }
+  </script>
+</body>
+</html> 
