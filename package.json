@@ -1,0 +1,26 @@
+{
+  "name": "react-circular-voronoi",
+  "version": "1.0.0",
+  "description": "A React library for creating circular Voronoi diagrams",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "webpack serve --mode development --open"
+  },
+  "keywords": [
+    "react",
+    "voronoi",
+    "d3",
+    "visualization",
+    "treemap",
+    "circular"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "^16.8.0 || ^17.0.0 || ^18.0.0",
+    "react-dom": "^16.8.0 || ^17.0.0 || ^18.0.0"
+  }
+}
