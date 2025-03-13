@@ -1,11 +1,10 @@
 import React, { useRef, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import * as d3 from 'd3';
-
-/**
- * CircularVoronoi component for creating circular Voronoi treemaps with drill-down functionality
- * Based on Will Chase's Observable notebook implementation
- */
+import { Delaunay } from 'd3-delaunay';
+import { voronoiTreemap } from 'd3-voronoi-treemap';
+import { polygonArea } from 'd3-polygon';
+ 
 const CircularVoronoi = ({
   data,
   width,
@@ -82,12 +81,8 @@ const CircularVoronoi = ({
     }
   };
 
-  // Compute Voronoi cells using d3-voronoi
+  // Compute Voronoi cells using d3-delaunay
   const computeVoronoiCells = (nodes, boundary) => {
-    // Create a Voronoi generator
-    const voronoi = d3.voronoi()
-      .extent([[0, 0], [width, height]]);
-    
     // Generate initial positions for nodes
     nodes.forEach((node, i) => {
       // Position nodes in a circle
@@ -101,15 +96,22 @@ const CircularVoronoi = ({
     // Iteratively adjust positions to match weights
     const iterations = 50;
     for (let iter = 0; iter < iterations; iter++) {
-      // Compute Voronoi diagram
-      const diagram = voronoi(nodes.map(d => [d.x, d.y]));
+      // Compute Voronoi diagram using Delaunay triangulation
+      const points = nodes.map(d => [d.x, d.y]);
+      const delaunay = Delaunay.from(points);
+      const voronoi = delaunay.voronoi([0, 0, width, height]);
       
-      // Clip cells to boundary
-      const polygons = diagram.polygons();
+      // Get polygons for each point
+      const polygons = nodes.map((_, i) => {
+        const polygon = [...voronoi.cellPolygon(i)];
+        // Remove the duplicated closing point that Delaunay adds
+        polygon.pop();
+        return polygon;
+      });
       
       // Calculate centroids and areas
       nodes.forEach((node, i) => {
-        if (polygons[i]) {
+        if (polygons[i] && polygons[i].length > 0) {
           // Calculate centroid
           let cx = 0, cy = 0;
           polygons[i].forEach(point => {
@@ -230,7 +232,7 @@ const CircularVoronoi = ({
         .attr("font-size", d => {
           if (!d.polygon) return "8px";
           // Calculate polygon area
-          const area = d3.polygonArea(d.polygon);
+          const area = polygonArea(d.polygon);
           return `${Math.min(Math.sqrt(area) / 4, 14)}px`;
         })
         .attr("fill", "#000")
