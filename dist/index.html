@@ -84,6 +84,16 @@
       border-radius: 8px;
       overflow: hidden;
     }
+    /* Add styles for optimized label rendering */
+    .voronoi-label {
+      pointer-events: none;
+      font-weight: 500;
+      paint-order: stroke;
+      stroke: rgba(255, 255, 255, 0.7);
+      stroke-width: 2px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
   </style>
 </head>
 <body>
@@ -293,6 +303,96 @@
     let showLabels = true;
     let currentDataset = 'population';
 
+    // Helper function to calculate polygon centroid
+    function polygonCentroid(polygon) {
+      if (!polygon || polygon.length === 0) return [0, 0];
+      
+      // Calculate centroid using d3-polygon for accurate centroid calculation
+      const centroid = d3.polygonCentroid(polygon);
+      return centroid;
+    }
+    
+    // Helper function to determine if a label should be rotated
+    function shouldRotateLabel(polygon) {
+      if (!polygon || polygon.length < 3) return false;
+      
+      // Calculate the bounding box of the polygon
+      const xs = polygon.map(p => p[0]);
+      const ys = polygon.map(p => p[1]);
+      const width = Math.max(...xs) - Math.min(...xs);
+      const height = Math.max(...ys) - Math.min(...ys);
+      
+      // If the cell is significantly wider than tall, we might want to rotate
+      return (width > height * 1.8);
+    }
+    
+    // Helper function to get the optimal rotation angle
+    function getOptimalRotation(polygon) {
+      if (!polygon || polygon.length < 3) return 0;
+      
+      // Find the main axis of the polygon
+      const points = polygon.slice(0);
+      const centroid = polygonCentroid(polygon);
+      
+      // Sort points by distance from centroid
+      points.sort((a, b) => {
+        const distA = Math.hypot(a[0] - centroid[0], a[1] - centroid[1]);
+        const distB = Math.hypot(b[0] - centroid[0], b[1] - centroid[1]);
+        return distB - distA; // Farthest first
+      });
+      
+      // Use the farthest points to determine orientation
+      const p1 = points[0];
+      const p2 = points[1];
+      
+      // Calculate angle in degrees
+      const angle = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180 / Math.PI;
+      
+      // Normalize to range [-90, 90] for text rotation
+      let rotation = angle;
+      if (rotation > 90) rotation -= 180;
+      if (rotation < -90) rotation += 180;
+      
+      return rotation;
+    }
+    
+    // Helper function to calculate if a label fits inside a polygon
+    function labelFitsInPolygon(polygon, labelText, fontSize) {
+      if (!polygon || polygon.length === 0) return false;
+      
+      // Calculate approximate width of the text based on font size and characters
+      const approxCharWidth = fontSize * 0.6; // Rough estimate
+      const textWidth = labelText.length * approxCharWidth;
+      const textHeight = fontSize * 1.2;
+      
+      // Calculate polygon width and height (rough approximation)
+      const xs = polygon.map(p => p[0]);
+      const ys = polygon.map(p => p[1]);
+      const width = Math.max(...xs) - Math.min(...xs);
+      const height = Math.max(...ys) - Math.min(...ys);
+      
+      // Check if text would fit
+      return (textWidth < width * 0.9 && textHeight < height * 0.9);
+    }
+    
+    // Helper function to get optimal font size for a polygon
+    function getOptimalFontSize(polygon, labelText) {
+      if (!polygon) return 0;
+      
+      // Calculate polygon area using d3-polygon
+      const area = d3.polygonArea(polygon);
+      
+      // Base size on square root of area, but cap it
+      let fontSize = Math.min(Math.sqrt(area) / 4, 14);
+      
+      // Reduce size if text is long
+      if (labelText.length > 10) {
+        fontSize *= (10 / labelText.length) * 1.2;
+      }
+      
+      return Math.max(8, Math.min(14, fontSize));
+    }
+
     // Initialize React components when the page loads
     document.addEventListener('DOMContentLoaded', function() {
       renderVoronoi();
@@ -333,6 +433,54 @@
       alert(`Clicked: ${data.name} - Value: ${data.value.toLocaleString()}`);
     }
 
+    // Custom label rendering function that optimizes label placement
+    function optimizeLabelPlacement(svg, node) {
+      if (!node.polygon) return;
+      
+      // Get label text and calculate centroid
+      const labelText = node.data.name;
+      const centroid = polygonCentroid(node.polygon);
+      
+      // Calculate font size based on cell size
+      const fontSize = getOptimalFontSize(node.polygon, labelText);
+      
+      // Check if we should rotate the label based on polygon shape
+      const shouldRotate = shouldRotateLabel(node.polygon);
+      let rotation = 0;
+      
+      if (shouldRotate) {
+        // Calculate optimal rotation angle
+        rotation = getOptimalRotation(node.polygon);
+      }
+      
+      // Only show label if it's likely to fit
+      if (fontSize < 8 || !labelFitsInPolygon(node.polygon, labelText, fontSize)) {
+        return;
+      }
+      
+      // Create text element
+      const text = svg.append("text")
+        .attr("class", "voronoi-label")
+        .attr("x", centroid[0])
+        .attr("y", centroid[1])
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "middle")
+        .attr("font-size", `${fontSize}px`)
+        .attr("fill", "#000")
+        .text(labelText);
+      
+      // Apply rotation if needed
+      if (shouldRotate && rotation !== 0) {
+        text.attr("transform", `rotate(${rotation}, ${centroid[0]}, ${centroid[1]})`);
+      }
+      
+      // For very short labels in small cells, we might need to shorten them
+      if (labelText.length > 8 && fontSize < 10) {
+        // Shorten text if it's too long for a small cell
+        text.text(labelText.substring(0, 7) + "...");
+      }
+    }
+
     // Render the Voronoi diagram
     function renderVoronoi() {
       const container = document.getElementById('voronoi-container');
@@ -344,7 +492,7 @@
         width: width,
         height: height,
         colors: currentDataset === 'population' ? populationColors : marketColors,
-        showLabels: showLabels,
+        showLabels: false, // We'll handle labels ourselves
         labelMinSize: 15,
         onCellClick: handleCellClick,
         valueKey: 'value',
@@ -356,6 +504,34 @@
       const domContainer = document.getElementById('voronoi-container');
       const root = ReactDOM.createRoot(domContainer);
       root.render(React.createElement(ReactCircularVoronoi.default, props));
+      
+      // If labels should be shown, we'll add them manually with our optimized method
+      if (showLabels) {
+        // Wait a bit for the React component to finish rendering
+        setTimeout(() => {
+          // Get the SVG element
+          const svg = d3.select('#voronoi-container svg');
+          if (!svg.empty()) {
+            // Extract nodes data from cells
+            const cells = svg.selectAll('path').nodes();
+            const nodesData = cells.map(cell => {
+              const d = d3.select(cell).datum();
+              return {
+                polygon: d.polygon,
+                data: d.data,
+                depth: d.depth
+              };
+            });
+            
+            // Add optimized labels
+            nodesData
+              .filter(d => d.depth > 0) // Skip the root
+              .forEach(node => {
+                optimizeLabelPlacement(svg, node);
+              });
+          }
+        }, 100);
+      }
     }
   </script>
 </body>
