@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
-import * as d3 from 'd3';
-import { Delaunay } from 'd3-delaunay';
+import * as d3 from 'd3'; 
 import { voronoiTreemap } from 'd3-voronoi-treemap';
 import { polygonArea } from 'd3-polygon';
 
