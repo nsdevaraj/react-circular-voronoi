@@ -4,7 +4,11 @@ import * as d3 from 'd3';
 import { Delaunay } from 'd3-delaunay';
 import { voronoiTreemap } from 'd3-voronoi-treemap';
 import { polygonArea } from 'd3-polygon';
- 
+
+/**
+ * CircularVoronoi component for creating circular Voronoi treemaps
+ * Displays hierarchical data in a circular layout with optimized visualization
+ */
 const CircularVoronoi = ({
   data,
   width,
@@ -23,6 +27,7 @@ const CircularVoronoi = ({
   const [currentLevel, setCurrentLevel] = useState(null);
   const [history, setHistory] = useState([]);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [computedData, setComputedData] = useState(null);
   
   // Create a circular boundary for the Voronoi diagram
   const createCircularBoundary = (width, height, padding) => {
@@ -55,18 +60,44 @@ const CircularVoronoi = ({
       setHistory([]);
     }
     
-    renderVoronoi();
-  }, [data, width, height, padding, valueKey, currentLevel, isTransitioning]);
+    const computeTreemap = async () => {
+      try {
+        // Create hierarchy from the current level data
+        const hierarchy = d3.hierarchy(currentLevel)
+          .sum(d => d[valueKey] || 1);
+          
+        // Create circular boundary
+        const circularBoundary = createCircularBoundary(width, height, padding);
+        
+        // Create Voronoi treemap generator
+        const treemapGenerator = voronoiTreemap()
+          .clip(circularBoundary)
+          .convergenceRatio(0.01) // Lower for better performance, higher for accuracy
+          .maxIterationCount(50); // Limit iterations for performance
+        
+        // Compute the treemap
+        await treemapGenerator(hierarchy);
+        
+        // Store computed data
+        setComputedData(hierarchy);
+      } catch (error) {
+        console.error("Error computing Voronoi treemap:", error);
+      }
+    };
+    
+    computeTreemap();
+  }, [currentLevel, data, width, height, padding, valueKey]);
 
   // Handle drill down
   const drillDown = (node) => {
     if (node.children && node.children.length > 0) {
       setIsTransitioning(true);
       setHistory([...history, currentLevel]);
-      setCurrentLevel(node);
+      setCurrentLevel(node.data);
+      setComputedData(null); // Reset computed data for new level
       setTimeout(() => setIsTransitioning(false), 500);
     } else if (onCellClick) {
-      onCellClick(node);
+      onCellClick(node.data);
     }
   };
 
@@ -76,67 +107,15 @@ const CircularVoronoi = ({
       setIsTransitioning(true);
       const previousLevel = history[history.length - 1];
       setCurrentLevel(previousLevel);
+      setComputedData(null); // Reset computed data
       setHistory(history.slice(0, -1));
       setTimeout(() => setIsTransitioning(false), 500);
     }
   };
 
-  // Compute Voronoi cells using d3-delaunay
-  const computeVoronoiCells = (nodes, boundary) => {
-    // Generate initial positions for nodes
-    nodes.forEach((node, i) => {
-      // Position nodes in a circle
-      const angle = (i / nodes.length) * 2 * Math.PI;
-      const radius = Math.min(width, height) / 4;
-      node.x = width / 2 + radius * Math.cos(angle);
-      node.y = height / 2 + radius * Math.sin(angle);
-      node.weight = node[valueKey] || 1;
-    });
-    
-    // Iteratively adjust positions to match weights
-    const iterations = 50;
-    for (let iter = 0; iter < iterations; iter++) {
-      // Compute Voronoi diagram using Delaunay triangulation
-      const points = nodes.map(d => [d.x, d.y]);
-      const delaunay = Delaunay.from(points);
-      const voronoi = delaunay.voronoi([0, 0, width, height]);
-      
-      // Get polygons for each point
-      const polygons = nodes.map((_, i) => {
-        const polygon = [...voronoi.cellPolygon(i)];
-        // Remove the duplicated closing point that Delaunay adds
-        polygon.pop();
-        return polygon;
-      });
-      
-      // Calculate centroids and areas
-      nodes.forEach((node, i) => {
-        if (polygons[i] && polygons[i].length > 0) {
-          // Calculate centroid
-          let cx = 0, cy = 0;
-          polygons[i].forEach(point => {
-            cx += point[0];
-            cy += point[1];
-          });
-          cx /= polygons[i].length;
-          cy /= polygons[i].length;
-          
-          // Move node toward centroid
-          node.x = node.x * 0.7 + cx * 0.3;
-          node.y = node.y * 0.7 + cy * 0.3;
-          
-          // Store polygon for rendering
-          node.polygon = polygons[i];
-        }
-      });
-    }
-    
-    return nodes;
-  };
-
   // Render the Voronoi treemap
-  const renderVoronoi = () => {
-    if (!currentLevel || !svgRef.current) return;
+  useEffect(() => {
+    if (!computedData || !svgRef.current) return;
     
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
@@ -175,57 +154,51 @@ const CircularVoronoi = ({
       .attr("font-weight", "bold")
       .text(currentLevel[labelKey] || "Root");
     
-    // Create circular boundary
-    const boundary = createCircularBoundary(width, height, padding);
-    
-    // Prepare data for Voronoi computation
-    const nodes = currentLevel.children ? 
-      currentLevel.children.map(child => ({...child})) : 
-      [];
-    
-    // Compute Voronoi cells
-    const cells = computeVoronoiCells(nodes, boundary);
-    
     // Create color scale
     const colorScale = d3.scaleOrdinal()
-      .domain(cells.map(d => d[labelKey]))
+      .domain(computedData.descendants().filter(d => d.depth > 0).map(d => d.data[labelKey]))
       .range(colors);
     
-    // Draw cells
+    // Draw cells - only draw cells below the root
     g.selectAll("path")
-      .data(cells)
+      .data(computedData.descendants().filter(d => d.depth > 0))
       .enter()
       .append("path")
       .attr("d", d => {
         if (!d.polygon || d.polygon.length === 0) return "";
         return `M${d.polygon.join("L")}Z`;
       })
-      .attr("fill", d => colorScale(d[labelKey]))
+      .attr("fill", d => colorScale(d.data[labelKey]))
       .attr("stroke", "#fff")
       .attr("stroke-width", 1.5)
       .attr("cursor", d => d.children && d.children.length > 0 ? "pointer" : "default")
       .on("click", (event, d) => drillDown(d))
       .append("title")
-      .text(d => `${d[labelKey]}: ${d[valueKey].toLocaleString()}`);
+      .text(d => `${d.data[labelKey]}: ${d.data[valueKey].toLocaleString()}`);
     
     // Add labels if enabled
     if (showLabels) {
       g.selectAll("text.label")
-        .data(cells)
+        .data(computedData.descendants().filter(d => {
+          // Only show labels for cells large enough
+          if (!d.polygon) return false;
+          const area = polygonArea(d.polygon);
+          return area > labelMinSize * labelMinSize && d.depth > 0;
+        }))
         .enter()
         .append("text")
         .attr("class", "label")
         .attr("x", d => {
           if (!d.polygon) return 0;
-          // Find centroid
-          const x = d.polygon.reduce((sum, point) => sum + point[0], 0) / d.polygon.length;
-          return x;
+          // Calculate proper centroid using d3-polygon
+          const centroid = d3.polygonCentroid(d.polygon);
+          return centroid[0];
         })
         .attr("y", d => {
           if (!d.polygon) return 0;
-          // Find centroid
-          const y = d.polygon.reduce((sum, point) => sum + point[1], 0) / d.polygon.length;
-          return y;
+          // Calculate proper centroid using d3-polygon
+          const centroid = d3.polygonCentroid(d.polygon);
+          return centroid[1];
         })
         .attr("text-anchor", "middle")
         .attr("dominant-baseline", "middle")
@@ -233,11 +206,12 @@ const CircularVoronoi = ({
           if (!d.polygon) return "8px";
           // Calculate polygon area
           const area = polygonArea(d.polygon);
+          // Scale font size based on area, with constraints
           return `${Math.min(Math.sqrt(area) / 4, 14)}px`;
         })
         .attr("fill", "#000")
         .attr("pointer-events", "none")
-        .text(d => d[labelKey]);
+        .text(d => d.data[labelKey]);
     }
     
     // Add transition effect
@@ -247,12 +221,13 @@ const CircularVoronoi = ({
         .duration(500)
         .attr("opacity", 1);
     }
-  };
+  }, [computedData, history, currentLevel, labelKey, valueKey, colors, width, height, showLabels, labelMinSize, isTransitioning]);
 
   // Reset to root level
   const resetToRoot = () => {
     setIsTransitioning(true);
     setCurrentLevel(data);
+    setComputedData(null);
     setHistory([]);
     setTimeout(() => setIsTransitioning(false), 500);
   };
